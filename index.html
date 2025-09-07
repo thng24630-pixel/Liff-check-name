@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Student Attendance Check</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+
+  <!-- jQuery -->
+  <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+
+  <!-- Sweet Alert -->
+  <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <!-- Loading Overlay -->
+  <script src="https://cdn.jsdelivr.net/npm/gasparesganga-jquery-loading-overlay@2.1.7/dist/loadingoverlay.min.js"></script>
+
+  <style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Thai');
+
+  * {
+    box-sizing: border-box;
+    font-family: 'Noto Sans Thai', sans-serif;
+  }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      background: rgb(252, 233, 233);
+      background: linear-gradient(0deg, rgba(252, 233, 233, 1) 0%, rgba(224, 244, 241, 1) 26%, rgba(255, 255, 255, 1) 71%);
+      -webkit-background-size: cover;
+      -moz-background-size: cover;
+      -o-background-size: cover;
+      flex-direction: column;
+      padding-bottom: 60px; /* Add padding to prevent footer overlap */
+    }
+  
+    .list {
+      background-color: #ffffff;
+      padding: 1.8em 1.2em;
+      box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
+      border-radius: 0.6em;
+    }
+  
+    footer {
+      margin-top: 10px;
+      background-color: #000;
+      width: 100%;
+      padding: 2px;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+    }
+  
+    footer p,
+    footer a {
+      text-decoration: none;
+      margin: 0;
+    }
+  
+    footer .fa {
+      color: #fff740;
+    }
+  </style>
+  </head>
+<body>
+  <center class="mb-4" >
+    <img src="https://lh3.googleusercontent.com/d/1ZMI9FTcErAj1N8vh0viy3rAPnxZ7Zsky" class="mt-4" style="width:200px; height:auto; padding-bottom: 10px; ">  
+    <h2>Student Attendance Apps</h2>                  
+    <h5 class="text-center text-danger">สื่อ และนวัตกรรมครูสิทธิชาติ สิทธิ</h5>   
+  </center>
+
+  <main class="container">
+    <div class="container list">
+      <div class="d-flex justify-content-center mb-3">
+        <button id="check-all-present" class="btn btn-primary me-2">มาทั้งหมด</button>
+        <button id="check-all-absent" class="btn btn-secondary">ขาดทั้งหมด</button>
+        <button id="check-all-leave" class="btn btn-warning ms-2">ลาทั้งหมด</button>
+        <button id="check-all-late" class="btn btn-danger ms-2">สายทั้งหมด</button>
+      </div>
+      <form id="attendance-form" class="mt-4">
+        <div class="row mb-3">
+          <label class="col-form-label">รายชื่อนักเรียน:</label>
+        </div>
+        <div id="student-list"></div>
+        <center><button type="submit" class="btn btn-primary mt-3">Submit Attendance</button></center>
+      </form>
+      <center><button id="send-summary" class="btn btn-success mt-3">Share Summary</button></center>
+    </div>
+  </main>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/sanwithz/SetFooter/sanzwithz.js"></script>
+
+  <script>
+    // =======================================================
+    // |         จุดที่ต้องแก้ไข (PLEASE EDIT THIS SECTION)       |
+    // =======================================================
+
+    // 1. ใส่ ID ของ Google Sheet และ ชื่อของแท็บ (Sheet Name) ของคุณ
+    const googleSheetID = '1U8H1tIE4WC0K3d_BoDINJdzQYJjjhEM3xzhPgPvQDbw'; // <-- ใส่ ID ของชีตที่นี่
+    const sheetName = 'Name';                   // <-- ใส่ชื่อแท็บที่นี่ (ปกติคือ Sheet1)
+
+    // 2. ใส่ LIFF ID ของคุณ
+    const liffId = '2008069104-rEqRzK67';                // <-- ใส่ LIFF ID ที่นี่
+
+    // =======================================================
+    // |             *** สิ้นสุดส่วนที่ต้องแก้ไข *** |
+    // =======================================================
+
+    let attendanceRecords = [];
+    const studentListUrl = `https://opensheet.elk.sh/${googleSheetID}/${sheetName}`;
+
+    window.onload = function() {
+      liff.init({ liffId: liffId })
+        .then(() => {
+          if (!liff.isLoggedIn()) {
+            liff.login();
+          } else {
+            console.log('LIFF initialized');
+            fetchStudentList();
+            document.getElementById('attendance-form').addEventListener('submit', addAttendanceRecord);
+            document.getElementById('send-summary').addEventListener('click', sendSummary);
+            document.getElementById('check-all-present').addEventListener('click', () => checkAll('มา'));
+            document.getElementById('check-all-absent').addEventListener('click', () => checkAll('ขาด'));
+            document.getElementById('check-all-leave').addEventListener('click', () => checkAll('ลา'));
+            document.getElementById('check-all-late').addEventListener('click', () => checkAll('สาย'));
+          }
+        })
+        .catch((err) => {
+          console.error('Error initializing LIFF: ', err);
+          Swal.fire('Error', 'Failed to initialize LIFF: ' + err, 'error');
+        });
+    };
+
+    function fetchStudentList() {
+      $.LoadingOverlay("show");
+      fetch(studentListUrl)
+        .then(response => response.json())
+        .then(data => {
+            generateStudentList(data);
+            $.LoadingOverlay("hide");
+        })
+        .catch(error => {
+           console.error('Error fetching student list: ', error);
+           Swal.fire('Error', 'ดึงรายชื่อนักเรียนไม่สำเร็จ! กรุณาตรวจสอบลิงก์ Google Sheet และชื่อคอลัมน์ (ต้องมี "เลขที่" และ "รายชื่อนักเรียน")', 'error');
+           $.LoadingOverlay("hide");
+        });
+    }
+
+    function generateStudentList(students) {
+      const studentList = document.getElementById('student-list');
+      studentList.innerHTML = ''; // Clear previous list
+      students.forEach(student => {
+        // ตรวจสอบว่ามีคอลัมน์ที่ต้องการหรือไม่
+        if (student['เลขที่'] && student['รายชื่อนักเรียน']) {
+          const studentRow = document.createElement('div');
+          studentRow.className = 'row mb-3 align-items-center';
+          studentRow.innerHTML = `
+            <div class="col-5">
+              <label class="form-label">${student['เลขที่']}. ${student['รายชื่อนักเรียน']}</label>
+            </div>
+            <div class="col-7 d-flex justify-content-around flex-wrap">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="student${student['เลขที่']}" value="มา" required>
+                    <label class="form-check-label">มา</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="student${student['เลขที่']}" value="ขาด" required>
+                    <label class="form-check-label">ขาด</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="student${student['เลขที่']}" value="ลา" required>
+                    <label class="form-check-label">ลา</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="student${student['เลขที่']}" value="สาย" required>
+                    <label class="form-check-label">สาย</label>
+                </div>
+            </div>
+          `;
+          studentList.appendChild(studentRow);
+        }
+      });
+    }
+  
+    $(document).ready(function() { 
+       setFooter()
+    })
+    
+    function checkAll(status) {
+      const studentList = document.getElementById('student-list');
+      const radios = studentList.querySelectorAll(`input[value="${status}"]`);
+      radios.forEach(radio => radio.checked = true);
+    }
+
+    function addAttendanceRecord(event) {
+      event.preventDefault();
+      attendanceRecords = [];
+      let allSelected = true;
+
+      const studentList = document.getElementById('student-list');
+      const studentRows = studentList.querySelectorAll('.row');
+
+      studentRows.forEach(row => {
+        const studentNameLabel = row.querySelector('.form-label');
+        if (studentNameLabel) {
+            const studentName = studentNameLabel.innerText;
+            const studentStatusElement = row.querySelector('input:checked');
+
+            if (studentStatusElement) {
+              const studentStatus = studentStatusElement.value;
+              attendanceRecords.push({ name: studentName, status: studentStatus });
+            } else {
+              allSelected = false;
+            }
+        }
+      });
+
+      if (allSelected) {
+        Swal.fire('Success', 'ข้อมูลพร้อมสำหรับส่งสรุปผลแล้ว! กรุณากดปุ่ม Share Summary', 'success');
+        // ปิดฟังก์ชันบันทึกข้อมูลไว้ชั่วคราวเพื่อให้แอปทำงานได้ง่ายขึ้นก่อน
+        // saveToSheet(attendanceRecords); 
+      } else {
+        Swal.fire('Error', 'กรุณาเช็คชื่อนักเรียนให้ครบทุกคน!', 'error');
+      }
+    }
+
+    function saveToSheet(records) {
+      // ฟังก์ชันนี้ยังไม่เปิดใช้งานในเวอร์ชันนี้
+    }
+
+    function sendSummary() {
+      if (attendanceRecords.length === 0) {
+        Swal.fire('Error', 'กรุณากด Submit Attendance ก่อนส่งสรุปผล!', 'error');
+        return;
+      }
+
+      // ... (ส่วนคำนวณเหมือนเดิม)
+      const presentCount = attendanceRecords.filter(record => record.status === 'มา').length;
+      const absentCount = attendanceRecords.filter(record => record.status === 'ขาด').length;
+      const leaveCount = attendanceRecords.filter(record => record.status === 'ลา').length;
+      const lateCount = attendanceRecords.filter(record => record.status === 'สาย').length;
+      const totalCount = attendanceRecords.length;
+      const presentPercentage = totalCount > 0 ? ((presentCount / totalCount) * 100).toFixed(1) : 0;
+      const absentPercentage = totalCount > 0 ? ((absentCount / totalCount) * 100).toFixed(1) : 0;
+      const leavePercentage = totalCount > 0 ? ((leaveCount / totalCount) * 100).toFixed(1) : 0;
+      const latePercentage = totalCount > 0 ? ((lateCount / totalCount) * 100).toFixed(1) : 0;
+      const thaiLocale = 'th-TH';
+      const dateOptions = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+      const dateString = new Date().toLocaleDateString(thaiLocale, dateOptions);
+
+
+      const flexMessage = {
+        type: 'flex',
+        altText: 'สรุปผลการเช็คชื่อ',
+        contents: {
+            type: 'bubble',
+            size: 'giga',
+            header: {
+                type: 'box',
+                layout: 'vertical',
+                contents: [
+                    {
+                        type: 'text',
+                        text: 'สรุปผลการเช็คชื่อ',
+                        weight: 'bold',
+                        size: 'xl',
+                        color: '#FFFFFF',
+                        align: 'center'
+                    },
+                    {
+                        type: 'text',
+                        text: dateString,
+                        color: '#FFFFFFCC',
+                        size: 'sm',
+                        align: 'center',
+                        margin: 'md'
+                    }
+                ],
+                backgroundColor: '#00B900',
+                paddingAll: 'lg'
+            },
+            body: {
+                type: 'box',
+                layout: 'vertical',
+                contents: [
+                    {
+                        type: 'box',
+                        layout: 'vertical',
+                        margin: 'lg',
+                        spacing: 'sm',
+                        contents: attendanceRecords.map(record => ({
+                            type: 'box',
+                            layout: 'horizontal',
+                            contents: [
+                                {
+                                    type: 'text',
+                                    text: record.name,
+                                    size: 'sm',
+                                    color: '#555555',
+                                    flex: 4
+                                },
+                                {
+                                    type: 'text',
+                                    text: record.status,
+                                    size: 'sm',
+                                    color: record.status === 'มา' ? '#1DB446' : (record.status === 'ขาด' ? '#FF5555' : (record.status === 'ลา' ? '#FFA500' : '#FF8C00')),
+                                    align: 'end',
+                                    weight: 'bold',
+                                    flex: 1
+                                }
+                            ]
+                        }))
+                    }
+                ]
+            },
+            footer: {
+                type: 'box',
+                layout: 'vertical',
+                spacing: 'sm',
+                contents: [
+                    { 'type': 'separator' },
+                    {
+                      type: 'box',
+                      layout: 'horizontal',
+                      margin: 'md',
+                      contents: [
+                          { type: 'text', text: 'มา', flex: 2, size: 'sm', color: '#1DB446' },
+                          { type: 'text', text: `${presentCount} คน (${presentPercentage}%)`, flex: 3, size: 'sm', align: 'end', color: '#1DB446' }
+                      ]
+                    },
+                    {
+                      type: 'box',
+                      layout: 'horizontal',
+                      contents: [
+                          { type: 'text', text: 'ขาด', flex: 2, size: 'sm', color: '#FF5555' },
+                          { type: 'text', text: `${absentCount} คน (${absentPercentage}%)`, flex: 3, size: 'sm', align: 'end', color: '#FF5555' }
+                      ]
+                    },
+                    {
+                      type: 'box',
+                      layout: 'horizontal',
+                      contents: [
+                          { type: 'text', text: 'ลา', flex: 2, size: 'sm', color: '#FFA500' },
+                          { type: 'text', text: `${leaveCount} คน (${leavePercentage}%)`, flex: 3, size: 'sm', align: 'end', color: '#FFA500' }
+                      ]
+                    },
+                    {
+                      type: 'box',
+                      layout: 'horizontal',
+                      contents: [
+                          { type: 'text', text: 'สาย', flex: 2, size: 'sm', color: '#FF8C00' },
+                          { type: 'text', text: `${lateCount} คน (${latePercentage}%)`, flex: 3, size: 'sm', align: 'end', color: '#FF8C00' }
+                      ]
+                    }
+                ],
+                flex: 0
+            }
+        }
+      };
+      
+      if (liff.isInClient()) {
+         liff.shareTargetPicker([flexMessage])
+            .then(() => {
+                liff.closeWindow();
+            }).catch((error) => {
+                console.error(error);
+                Swal.fire('Error', 'เกิดข้อผิดพลาดในการแชร์!', 'error');
+            });
+      } else {
+        Swal.fire('Info', 'กรุณาเปิดในแอปพลิเคชัน LINE เพื่อใช้งานฟังก์ชันแชร์', 'info');
+      }
+    }
+
+  </script>
+  
+  <footer class="text-center text-lg-start bg-light text-muted">
+    <div class="footer-container"></div>
+  </footer>
+</body>
+</html>
+
